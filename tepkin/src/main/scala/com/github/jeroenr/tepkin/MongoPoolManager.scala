@@ -58,28 +58,6 @@ class MongoPoolManager(uri: MongoClientUri, nConnectionsPerNode: Int, readPrefer
       nodes += (sender() -> NodeDetails(result.maxWireVersion, elapsed))
       log.debug(s"Nodes: $nodes")
 
-      val newRemotes = result.replicaSet.map { replicaSet =>
-        replicaSet.hosts.map { node =>
-          val Array(host, port) = node.split(":")
-          new InetSocketAddress(host, port.toInt)
-        }.toSet
-      }.getOrElse(Set.empty)
-
-      for (remote <- newRemotes.diff(remotes)) {
-        val pool = context.actorOf(
-          MongoPool.props(
-            remote,
-            nConnectionsPerNode,
-            uri.database.getOrElse("admin"),
-            uri.credentials,
-            uri.option("authMechanism").map(AuthMechanism.apply)),
-        s"pool-$remote".replaceAll("\\W", "_"))
-        log.info("New node found. Created pool for {}", remote)
-        pools += pool
-      }
-
-      remotes ++= newRemotes
-
       if (result.isMaster) {
         primary match {
           case Some(ref) if ref == sender() =>
